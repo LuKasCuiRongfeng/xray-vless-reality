@@ -91,6 +91,21 @@
 
 无需 root, 可在 Linux / Git Bash 运行。覆盖: 密钥解析(新旧格式)、默认值与环境变量覆盖、非法端口、保留配置重装、防火墙三体系放行与卸载回滚、BBR 三态、链接与汇总输出、卸载全流程。
 
+## 常见问题 (FAQ)
+
+**Hysteria2 节点在 v2rayN 里选哪个核心？**
+
+实测 v2rayN V7.24.9: **Xray 核心即可正常连接**（官方 hysteria 服务器与 v2rayN 的 Xray 核心 H2 客户端兼容）。sing-box 核心在部分版本存在 v2rayN 生成配置兼容问题——典型表现为日志 `independent_cache DNS option is deprecated` + `FATAL[0000] initialize dns router`（v2rayN 生成的 DNS 配置与新版 sing-box 不兼容, 服务启动即失败, 与 allowInsecure 无关）。如遇请切回 Xray 核心, 或降级 sing-box 核心至 1.13.x。
+
+**"AllowInsecure 已启用但未提供证书"弹窗？**
+
+v2rayN 导入 H2 链接时默认打开"跳过证书验证"。我们的链接已内置 pinSHA256 (固定证书), 建议在节点设置中**关闭"跳过证书验证 (allowInsecure)"**, 只保留固定证书指纹——更安全且消除弹窗。若关闭后不通, 可保持开启, 不影响使用。
+
+**稳定性与速度怎么选？**
+
+- 稳定线 (VLESS+Reality): 任何客户端都能连, 日常首选
+- 速度线 (Hysteria2): 大流量/测速首选, 吞吐在 UDP 未被 ISP QoS 时显著更高; 若 UDP 被干扰则可能不如 TCP 线——两条线保留, 按需切换
+
 ## 安全提示
 
 - 建议更换默认 SNI / DEST 为自己常用的 HTTPS 站点, 伪装效果更好。
