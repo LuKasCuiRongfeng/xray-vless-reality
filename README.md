@@ -18,14 +18,14 @@
 
     curl -fsSL https://raw.githubusercontent.com/LuKasCuiRongfeng/xray-vless-reality/master/install.sh | sudo bash -s install
 
-安装完成后脚本会打印完整信息汇总: 分享链接 (vless://)、服务状态、Xray 版本、BBR 加速、IP/端口/SNI/UUID、配置路径等。链接复制到 v2rayN / Shadowrocket / Clash Verge 等客户端导入即可。
+安装完成后脚本会打印完整信息汇总与**两条分享链接**: [稳定] vless:// (VLESS+Reality, 日常使用) + [速度] hysteria2:// (Hysteria2, 大流量/测速使用), 复制到 v2rayN / Shadowrocket 等客户端导入即可。Hysteria2 节点在 v2rayN 中请切换为 hysteria2 / sing-box 核心。
 
 > 注意: 需在防火墙 / 云安全组放行 TCP 端口 (默认 443)。客户端与服务端时间请保持同步 (建议开启 NTP),
 > 否则 Reality 握手会失败。
 
 ## 常用命令
 
-    sudo bash install.sh install             安装 (默认重新生成配置/密钥, 旧配置自动备份)
+    sudo bash install.sh install             双线安装: VLESS+Reality(稳定) + Hysteria2(速度), 两条链接自由选择
     sudo bash install.sh install --keep      保留现有配置, 仅修复 / 重装服务
     sudo bash install.sh link                重新打印分享链接 (无需 root)
     sudo bash install.sh restart             重启服务
@@ -48,6 +48,11 @@
 | XRAY_VERSION | 自动最新 | 固定 Xray 版本, 如 v2.26.0 |
 | GEO_DATA | 0 | 是否安装 geoip/geosite 路由数据 (1 为安装, 约 29MB, 本脚本默认不需要) |
 | ENABLE_BBR | 1 | 安装时是否自动启用 BBR 加速 (内核不支持时自动跳过, 不换内核) |
+| HY2_PORT | 8443 | Hysteria2 速度线端口 (**UDP**) |
+| HY2_SNI | www.bing.com | Hysteria2 伪装域名 (自签证书 SAN 自动写入) |
+| HY2_PASS | 自动生成 | Hysteria2 密码 |
+| HY2_UP / HY2_DOWN | 留空 | 同时设置启用 Brutal 锁带宽 (Mbps); 默认 BBR 自适应 |
+| HY2_VERSION | 自动最新 | 固定 Hysteria 版本 (如 app/v2.12.2) |
 
 示例: 换端口 + 换伪装域名
 
@@ -62,6 +67,9 @@
 | /usr/local/etc/xray/meta.conf | UUID/公钥/SNI 等元数据, 用于打印链接 |
 | /etc/systemd/system/xray.service | systemd 单元 (专用用户运行, 已加固) |
 | /usr/local/etc/xray/firewall.conf | 记录脚本自动放行的防火墙规则 (用于卸载时精确回滚) |
+| /usr/local/etc/hysteria/ | Hysteria2 速度线配置 (config.yaml / 自签证书 / meta.conf) |
+| /usr/local/bin/hysteria | 官方 Hysteria2 二进制 |
+| /etc/systemd/system/hysteria.service | Hysteria2 systemd 单元 (UDP) |
 | geoip.dat / geosite.dat | 仅 GEO_DATA=1 时安装 (约 29MB, 默认不装) |
 | 系统用户 xray | 无登录 shell 的专用用户 |
 
@@ -75,6 +83,7 @@
 - 脚本不安装任何系统软件包 (curl / unzip 仅检查是否存在), 不换内核、不改防火墙、不开面板端口。
 - BBR: 内核支持时自动启用 2 个 sysctl 参数 (使用系统自带模块, 零软件/零磁盘, 即时生效无需重启); 内核低于 4.9 时自动跳过, 绝不自动升级内核。
 - 系统防火墙: 自动检测 ufw / firewalld / iptables, 只**精准放行**自己的 TCP 端口 (不清空用户已有规则), 卸载时仅回滚自己添加的规则。云厂商安全组 (如 Vultr Firewall) 在 VPS 之外, 脚本无法操作, 需在云控制台手动放行。
+- 双线架构: 同时安装 **VLESS+Reality(稳定线, TCP 443)** 与 **Hysteria2(速度线, UDP 8443)**, 两条链接由用户自由选择。Hysteria2 使用自签证书 + **pinSHA256 证书指纹** (应对新版 v2rayN 下线 allowInsecure 的证书强校验), 无域名即可用。
 
 ## 回归测试
 
@@ -92,6 +101,6 @@
 
     sudo bash install.sh uninstall
 
-会停止并禁用服务, 删除二进制 / 配置 / systemd 单元 / 系统用户, 配置自动备份到 /root/xray-config-backup/。
+会停止并禁用 xray 与 hysteria 两个服务, 删除两者的二进制 / 配置 / systemd 单元 / 系统用户, 配置自动备份到 /root/xray-config-backup/。
 BBR 为系统级优化, 卸载时保留; 如需移除请执行 sudo bash install.sh bbr off。
 脚本自动添加的防火墙规则会随卸载精确回滚 (只删除自己加的, 不动其他规则); 云厂商安全组放行需在云控制台手动移除。

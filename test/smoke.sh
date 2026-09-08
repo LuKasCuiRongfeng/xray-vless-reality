@@ -54,6 +54,10 @@ sed -e "s|/usr/local/etc/xray|$SIM/etc|g" \
     -e "s|/etc/systemd/system/xray.service|$SIM/svc|g" \
     -e "s|/etc/sysctl.d/99-xray-bbr.conf|$SIM/bbr.conf|g" \
     -e "s|/root/xray-config-backup|$SIM/backup|g" \
+    -e "s|/usr/local/etc/hysteria|$SIM/hy2|g" \
+    -e "s|/usr/local/bin/hysteria|$SIM/bin/hysteria|g" \
+    -e "s|/etc/systemd/system/hysteria.service|$SIM/hy2svc|g" \
+    -e "s|/etc/sysctl.d/90-xray-udp.conf|$SIM/udp.conf|g" \
     -e '$d' \
     -e '/^set -euo pipefail$/d' \
     -e 's|exec 3<>/dev/tcp/127.0.0.1/"$PORT"|false|' \
@@ -62,7 +66,9 @@ sed -e "s|/usr/local/etc/xray|$SIM/etc|g" \
 
 # ---------- 场景工具 ----------
 reset() {
-  rm -f "$SIM/etc/config.json" "$SIM/etc/meta.conf" "$SIM/etc/firewall.conf" "$SIM/bbr.conf" "$SIM/etc/config.json.bak"
+  rm -f "$SIM/etc/config.json" "$SIM/etc/meta.conf" "$SIM/etc/firewall.conf" "$SIM/bbr.conf" "$SIM/etc/config.json.bak" "$SIM/hy2svc" "$SIM/udp.conf"
+  rm -rf "$SIM/hy2"
+  mkdir -p "$SIM/hy2"
   unset -f ufw firewall-cmd systemctl iptables sysctl userdel netfilter-persistent iptables-save openssl chown 2>/dev/null || true
   chown() { return 0; }
   XRAY_DIR="$SIM/etc"
@@ -71,6 +77,10 @@ reset() {
   FW_FILE="$SIM/etc/firewall.conf"
   BIN_FILE="$SIM/bin/xray"
   PORT=""; NAME=""; SNI=""; DEST=""; UUID=""; IP=""
+  HY2_PORT=""; HY2_SNI=""; HY2_PASS=""; HY2_PIN=""; HY2_UP=""; HY2_DOWN=""; HY2_VERSION=""
+  HY2_DIR="$SIM/hy2"; HY2_CONFIG_FILE="$SIM/hy2/config.yaml"; HY2_META_FILE="$SIM/hy2/meta.conf"
+  HY2_CERT_FILE="$SIM/hy2/tls.crt"; HY2_KEY_FILE="$SIM/hy2/tls.key"; HY2_BIN_FILE="$SIM/bin/hysteria"
+  HY2_SERVICE_FILE="$SIM/hy2svc"
   : > "$SIM/log/calls"
 }
 stub_xray_new() {
@@ -136,6 +146,7 @@ sc_install_default_regen() {
   gen_config >/dev/null 2>&1 || return 1
   require_root() { return 0; }
   fetch_xray() { :; }
+  fetch_hy2() { :; }
   create_user() { return 0; }
   systemctl() { [ "$1" = "is-active" ] && { echo "active"; return 0; }; return 0; }
   sysctl() { if [ "$1" = "-n" ]; then echo "bbr"; fi; return 0; }
@@ -153,6 +164,7 @@ sc_install_keep() {
   old_uuid=$(grep '^UUID=' "$META_FILE" | cut -d= -f2)
   require_root() { return 0; }
   fetch_xray() { :; }
+  fetch_hy2() { :; }
   create_user() { return 0; }
   systemctl() { [ "$1" = "is-active" ] && { echo "active"; return 0; }; return 0; }
   sysctl() { if [ "$1" = "-n" ]; then echo "bbr"; fi; return 0; }
@@ -162,6 +174,50 @@ sc_install_keep() {
   new_uuid=$(grep '^UUID=' "$META_FILE" | cut -d= -f2)
   [ "$old_uuid" = "$new_uuid" ] || { echo "--keep 应保留原 UUID" >&2; return 1; }
   [ -f "$CONFIG_FILE.bak" ] && { echo "--keep 不应生成备份" >&2; return 1; }
+  return 0
+}
+sc_hy2_config() {
+  reset; stub_ip
+  NAME="test-node"
+  fetch_hy2() { :; }
+  generate_hy2_config >/dev/null 2>&1 || { echo "generate_hy2_config 不应失败" >&2; return 1; }
+  [ -f "$HY2_CONFIG_FILE" ] || { echo "config.yaml 应生成" >&2; return 1; }
+  [ -f "$HY2_CERT_FILE" ] || { echo "tls.crt 应生成" >&2; return 1; }
+  assert_contains "$HY2_CONFIG_FILE" "listen: :8443" "hy2默认端口" || return 1
+  assert_contains "$HY2_CONFIG_FILE" "password:" "hy2密码" || return 1
+  assert_contains "$HY2_CONFIG_FILE" "www.bing.com" "hy2伪装SNI" || return 1
+  local pin
+  pin=$(grep '^HY2_PIN=' "$HY2_META_FILE" | cut -d= -f2)
+  [ "${#pin}" -eq 64 ] || { echo "pinSHA256 应为64位hex, 实际=[$pin]" >&2; return 1; }
+  local link
+  link=$(build_hy2_link "1.2.3.4")
+  assert_contains_str "$link" "hysteria2://" "hy2链接前缀" || return 1
+  assert_contains_str "$link" "pinSHA256=$pin" "hy2指纹内置" || return 1
+  assert_contains_str "$link" "sni=www.bing.com" "hy2链接SNI" || return 1
+  return 0
+}
+sc_hy2_brutal() {
+  reset; stub_ip
+  NAME="test-node"
+  HY2_UP=100; HY2_DOWN=200
+  fetch_hy2() { :; }
+  generate_hy2_config >/dev/null 2>&1 || return 1
+  assert_contains "$HY2_CONFIG_FILE" "bandwidth:" "brutal带宽段" || return 1
+  assert_contains "$HY2_CONFIG_FILE" "up: 100 mbps" "上行配置" || return 1
+  local link
+  link=$(build_hy2_link "1.2.3.4")
+  assert_contains_str "$link" "upmbps=100&downmbps=200" "brutal链接参数" || return 1
+  return 0
+}
+sc_hy2_firewall() {
+  reset; stub_xray_new; stub_ip
+  gen_config >/dev/null 2>&1 || return 1
+  fetch_hy2() { :; }
+  generate_hy2_config >/dev/null 2>&1 || return 1
+  stub_ufw_active
+  open_firewall >/dev/null 2>&1 || return 1
+  assert_contains "$FW_FILE" "HY2_PORT=8443" "防火墙记录UDP" || return 1
+  assert_contains "$SIM/log/calls" "ufw allow 8443/udp" "UFW UDP放行" || return 1
   return 0
 }
 sc_keyparse_old() {
@@ -275,6 +331,7 @@ sc_summary() {
   assert_contains "$SIM/log/summary" "203.0.113.9" "公网IP" || return 1
   assert_contains "$SIM/log/summary" "vless://" "分享链接" || return 1
   assert_contains "$SIM/log/summary" "防火墙放行" "防火墙行" || return 1
+  assert_contains "$SIM/log/summary" "速度线 HY2" "速度线状态行" || return 1
   return 0
 }
 sc_link() {
@@ -287,8 +344,12 @@ sc_link() {
   return 0
 }
 sc_uninstall() {
-  reset; stub_xray_new; stub_ufw_active
+  reset; stub_xray_new; stub_ip
   gen_config >/dev/null 2>&1 || return 1
+  fetch_hy2() { :; }
+  generate_hy2_config >/dev/null 2>&1 || return 1
+  write_hy2_unit
+  stub_ufw_active
   open_firewall >/dev/null 2>&1 || return 1
   require_root() { return 0; }
   systemctl() { echo "systemctl $*" >> "$SIM/log/calls"; return 0; }
@@ -297,7 +358,10 @@ sc_uninstall() {
   [ -d "$SIM/etc" ] && { echo "卸载后配置目录应被删除" >&2; return 1; }
   ls "$SIM/backup" | grep -q config.json || { echo "应备份配置到 backup" >&2; return 1; }
   assert_contains "$SIM/log/calls" "ufw delete allow 443/tcp" "卸载回滚防火墙" || return 1
+  assert_contains "$SIM/log/calls" "ufw delete allow 8443/udp" "卸载回滚UDP" || return 1
   assert_contains "$SIM/log/calls" "userdel xray" "删除用户" || return 1
+  [ -d "$SIM/hy2" ] && { echo "卸载应删除 hy2 目录" >&2; return 1; }
+  [ -f "$SIM/hy2svc" ] && { echo "卸载应删除 hy2 单元" >&2; return 1; }
   return 0
 }
 
@@ -319,6 +383,9 @@ echo "== xray-vless-reality 回归测试 =="
 run_sc "全新安装默认值(新格式密钥)" sc_fresh_defaults
 run_sc "环境变量覆盖(PORT/SNI/NAME/链接)" sc_env_overrides
 run_sc "v26.2.6格式密钥解析(Password:无括号)" sc_keyparse_v262
+run_sc "Hysteria2 配置/自签证书/pinSHA256/链接" sc_hy2_config
+run_sc "Hysteria2 Brutal 锁带宽" sc_hy2_brutal
+run_sc "Hysteria2 防火墙 UDP 放行" sc_hy2_firewall
 run_sc "旧格式密钥解析回归" sc_keyparse_old
 run_sc "异常密钥输出应报错并附原始输出" sc_keyparse_bad
 run_sc "非法端口应有明确报错" sc_port_invalid
