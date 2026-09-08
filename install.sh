@@ -129,10 +129,11 @@ gen_config() {
   local keys priv pub sid
   log "生成 Reality 密钥对 / UUID / shortId ..."
   keys=$("$BIN_FILE" x25519)
-  priv=$(echo "$keys" | awk '/Private key:/ {print $3}')
-  pub=$(echo "$keys" | awk '/Public key:/ {print $3}')
+  # 兼容旧版 (Private key:/Public key:) 与新 (PrivateKey:/Password (PublicKey):) 两种输出
+  priv=$(printf '%s\n' "$keys" | sed -n 's/^Private *[Kk]ey: *//p')
+  pub=$(printf '%s\n' "$keys" | sed -n 's/^Password *(PublicKey): *//p; s/^Public *[Kk]ey: *//p')
   if [ -z "$priv" ] || [ -z "$pub" ]; then
-    die "生成 Reality 密钥失败"
+    die "生成 Reality 密钥失败, xray x25519 原始输出: ${keys}"
   fi
   UUID=$(sanitize "${UUID:-$("$BIN_FILE" uuid)}")
   [ -n "$UUID" ] || UUID=$("$BIN_FILE" uuid)
