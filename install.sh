@@ -42,10 +42,6 @@ require_root() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-highlight() {
-  printf '\033[46;30;1m%s\033[0m\n' "$1"
-}
-
 infoline() {
   printf '\033[44;37;1m%s\033[0m\n' "$1"
 }
@@ -273,7 +269,7 @@ print_link() {
   . "$META_FILE"
   echo ""
   echo "============= VLESS + Reality 分享链接 ============="
-  highlight "$(build_link "$ip")"
+  infoline "$(build_link "$ip")"
   echo "==================================================="
   echo ""
   echo "  IP: $ip    端口: $PORT    SNI: $SNI"
@@ -320,7 +316,7 @@ show_summary() {
   infoline "======================================================"
   echo ""
   infoline "  分享链接 (复制到 v2rayN / Shadowrocket 等客户端):"
-  highlight "$(build_link "$ip")"
+  infoline "$(build_link "$ip")"
   echo ""
   infoline "  管理命令:  bash install.sh link | restart | status | info | bbr | update | uninstall"
   infoline "  提示: 若客户端无法连接, 请检查防火墙 / 云安全组放行 TCP $PORT"
