@@ -42,6 +42,14 @@ require_root() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+highlight() {
+  printf '\033[46;30;1m%s\033[0m\n' "$1"
+}
+
+infoline() {
+  printf '\033[44;37;1m%s\033[0m\n' "$1"
+}
+
 sanitize() { echo "$1" | tr -cd '[:alnum:]_.-'; }
 
 check_deps() {
@@ -265,7 +273,7 @@ print_link() {
   . "$META_FILE"
   echo ""
   echo "============= VLESS + Reality 分享链接 ============="
-  echo "$(build_link "$ip")"
+  highlight "$(build_link "$ip")"
   echo "==================================================="
   echo ""
   echo "  IP: $ip    端口: $PORT    SNI: $SNI"
@@ -290,32 +298,32 @@ show_summary() {
     bbr="未启用 (当前: $cc)"
   fi
   echo ""
-  echo "===================== 安装信息汇总 ====================="
-  echo "  服务状态:   $svc"
-  echo "  Xray 版本:  ${ver:-未知}"
-  echo "  BBR 加速:   $bbr"
-  echo "  公网 IP:    $ip"
-  echo "  监听端口:   $PORT"
-  echo "  SNI 伪装:   $SNI"
-  echo "  UUID:       $UUID"
-  echo "  公钥 Pbk:   $PUB"
-  echo "  shortId:    $SID"
-  echo "  配置文件:   $CONFIG_FILE"
-  echo "  服务单元:   $SERVICE_FILE"
-  echo "  系统用户:   $SERVICE_USER"
+  infoline "===================== 安装信息汇总 ====================="
+  infoline "  服务状态:   $svc"
+  infoline "  Xray 版本:  ${ver:-未知}"
+  infoline "  BBR 加速:   $bbr"
+  infoline "  公网 IP:    $ip"
+  infoline "  监听端口:   $PORT"
+  infoline "  SNI 伪装:   $SNI"
+  infoline "  UUID:       $UUID"
+  infoline "  公钥 Pbk:   $PUB"
+  infoline "  shortId:    $SID"
+  infoline "  配置文件:   $CONFIG_FILE"
+  infoline "  服务单元:   $SERVICE_FILE"
+  infoline "  系统用户:   $SERVICE_USER"
   if [ -f "$FW_FILE" ]; then
     . "$FW_FILE"
-    echo "  防火墙放行: 已自动放行 TCP $PORT ($FIREWALL)"
+    infoline "  防火墙放行: 已自动放行 TCP $PORT ($FIREWALL)"
   else
-    echo "  防火墙放行: 系统防火墙无限制 (公网不通需检查云安全组)"
+    infoline "  防火墙放行: 系统防火墙无限制 (公网不通需检查云安全组)"
   fi
-  echo "======================================================"
+  infoline "======================================================"
   echo ""
-  echo "  分享链接 (复制到 v2rayN / Shadowrocket 等客户端):"
-  echo "$(build_link "$ip")"
+  infoline "  分享链接 (复制到 v2rayN / Shadowrocket 等客户端):"
+  highlight "$(build_link "$ip")"
   echo ""
-  echo "  管理命令:  bash install.sh link | restart | status | info | bbr | update | uninstall"
-  echo "  提示: 若客户端无法连接, 请检查防火墙 / 云安全组放行 TCP $PORT"
+  infoline "  管理命令:  bash install.sh link | restart | status | info | bbr | update | uninstall"
+  infoline "  提示: 若客户端无法连接, 请检查防火墙 / 云安全组放行 TCP $PORT"
   echo ""
 }
 
