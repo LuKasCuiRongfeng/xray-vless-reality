@@ -16,6 +16,7 @@
 #    IP            手动指定公网 IP, 默认自动探测
 #    XRAY_VERSION  指定 Xray 版本, 默认自动获取最新
 #    GEO_DATA      是否安装 geoip/geosite 路由数据(需路由规则时), 默认 0(不装)
+#    ENABLE_BBR    是否自动启用 BBR 加速(内核支持时), 默认 1; 0 = 跳过
 # ============================================================
 set -euo pipefail
 
@@ -244,25 +245,70 @@ get_public_ip() {
   echo ""
 }
 
-print_link() {
-  if [ ! -f "$META_FILE" ]; then
-    die "未找到安装信息 ($META_FILE), 请先运行: sudo bash install.sh install"
-  fi
+build_link() {
+  local ip="${1:-}"
+  [ -f "$META_FILE" ] || die "未找到安装信息 ($META_FILE)"
   . "$META_FILE"
+  echo "vless://$UUID@$ip:$PORT?encryption=none&security=reality&sni=$SNI&fp=chrome&pbk=$PUB&sid=$SID&spx=%2F&type=tcp&headerType=none&flow=xtls-rprx-vision#$NAME"
+}
+
+print_link() {
   local ip
+  [ -f "$META_FILE" ] || die "未找到安装信息 ($META_FILE), 请先运行: sudo bash install.sh install"
   ip=$(get_public_ip)
   if [ -z "$ip" ]; then
     warn "未能自动获取公网 IP, 可手动指定: IP=你的公网IP bash install.sh link"
     ip="<你的公网IP>"
   fi
+  . "$META_FILE"
   echo ""
   echo "============= VLESS + Reality 分享链接 ============="
-  echo "vless://$UUID@$ip:$PORT?encryption=none&security=reality&sni=$SNI&fp=chrome&pbk=$PUB&sid=$SID&spx=%2F&type=tcp&headerType=none&flow=xtls-rprx-vision#$NAME"
+  echo "$(build_link "$ip")"
   echo "==================================================="
   echo ""
   echo "  IP: $ip    端口: $PORT    SNI: $SNI"
   echo "  UUID: $UUID"
   echo "  公钥: $PUB    shortId: $SID"
+}
+
+show_summary() {
+  [ -f "$META_FILE" ] || die "未找到安装信息, 请先运行: sudo bash install.sh install"
+  . "$META_FILE"
+  local ip ver svc cc bbr
+  ip=$(get_public_ip)
+  [ -n "$ip" ] || ip="<你的公网IP>"
+  ver=$("$BIN_FILE" version 2>/dev/null | head -n 1 || true)
+  svc=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "unknown")
+  cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "?")
+  if [ "$cc" = "bbr" ]; then
+    bbr="已启用 (bbr)"
+  elif [ -f /etc/sysctl.d/99-xray-bbr.conf ]; then
+    bbr="配置文件存在但未生效 (当前: $cc)"
+  else
+    bbr="未启用 (当前: $cc)"
+  fi
+  echo ""
+  echo "===================== 安装信息汇总 ====================="
+  echo "  服务状态:   $svc"
+  echo "  Xray 版本:  ${ver:-未知}"
+  echo "  BBR 加速:   $bbr"
+  echo "  公网 IP:    $ip"
+  echo "  监听端口:   $PORT"
+  echo "  SNI 伪装:   $SNI"
+  echo "  UUID:       $UUID"
+  echo "  公钥 Pbk:   $PUB"
+  echo "  shortId:    $SID"
+  echo "  配置文件:   $CONFIG_FILE"
+  echo "  服务单元:   $SERVICE_FILE"
+  echo "  系统用户:   $SERVICE_USER"
+  echo "======================================================"
+  echo ""
+  echo "  分享链接 (复制到 v2rayN / Shadowrocket 等客户端):"
+  echo "$(build_link "$ip")"
+  echo ""
+  echo "  管理命令:  bash install.sh link | restart | status | info | bbr | update | uninstall"
+  echo "  提示: 若客户端无法连接, 请检查防火墙 / 云安全组放行 TCP $PORT"
+  echo ""
 }
 
 cmd_install() {
@@ -292,9 +338,8 @@ cmd_install() {
   else
     die "服务启动失败, 请检查: journalctl -u xray -n 50"
   fi
-  print_link
-  echo ""
-  warn "若客户端无法连接, 请检查防火墙 / 云安全组是否放行 TCP $PORT"
+  enable_bbr
+  show_summary
 }
 
 cmd_update() {
@@ -308,7 +353,7 @@ cmd_update() {
   fi
   systemctl start "$SERVICE_NAME" 2>/dev/null || true
   ok "Xray 已更新并重启"
-  print_link
+  show_summary
 }
 
 cmd_service() {
@@ -322,18 +367,74 @@ cmd_status() {
 }
 
 cmd_info() {
-  if [ ! -f "$META_FILE" ]; then
-    die "未找到安装信息, 请先运行: sudo bash install.sh install"
+  show_summary
+}
+
+enable_bbr() {
+  local cc avail
+  if [ "${ENABLE_BBR:-1}" = "0" ]; then
+    log "已跳过 BBR (ENABLE_BBR=0)"
+    return
   fi
-  local ip ver
-  ip=$(get_public_ip)
-  ver=$("$BIN_FILE" version 2>/dev/null | head -n 1) || true
-  echo "--- Xray 安装信息 ---"
-  echo "服务状态: $(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo unknown)"
-  echo "版本: $ver"
-  echo "配置: $CONFIG_FILE"
-  echo "公网IP: $ip"
-  print_link
+  cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)
+  if [ "$cc" = "bbr" ]; then
+    ok "BBR 已开启 (当前拥塞控制: bbr)"
+    return
+  fi
+  avail=$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || true)
+  if ! echo "$avail" | grep -qw bbr; then
+    modprobe tcp_bbr 2>/dev/null || true
+    avail=$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || true)
+  fi
+  if ! echo "$avail" | grep -qw bbr; then
+    warn "当前内核不支持 BBR (需 Linux 4.9+), 已跳过; 本脚本不会自动升级内核"
+    return
+  fi
+  cat > /etc/sysctl.d/99-xray-bbr.conf <<'EOF'
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+EOF
+  sysctl -p /etc/sysctl.d/99-xray-bbr.conf >/dev/null 2>&1 \
+    || sysctl -w net.core.default_qdisc=fq net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1 \
+    || true
+  cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)
+  if [ "$cc" = "bbr" ]; then
+    ok "BBR 已启用 (写入 /etc/sysctl.d/99-xray-bbr.conf, 即时生效无需重启)"
+  else
+    warn "sysctl 写入失败 (可能运行在受限容器中), BBR 未生效"
+  fi
+}
+
+bbr_status() {
+  local cc
+  cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "?")
+  echo "TCP 拥塞控制: $cc"
+  if [ -f /etc/sysctl.d/99-xray-bbr.conf ]; then
+    echo "配置文件: /etc/sysctl.d/99-xray-bbr.conf (存在)"
+  else
+    echo "配置文件: 无 (BBR 未由本脚本启用)"
+  fi
+}
+
+bbr_on() {
+  require_root
+  enable_bbr
+}
+
+bbr_off() {
+  require_root
+  rm -f /etc/sysctl.d/99-xray-bbr.conf
+  sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null 2>&1 || true
+  warn "已关闭 BBR, 拥塞控制恢复为 cubic (如需其它算法请手动调整)"
+}
+
+cmd_bbr() {
+  local action="${1:-}"
+  case "$action" in
+    on)  bbr_on ;;
+    off) bbr_off ;;
+    *)   bbr_status ;;
+  esac
 }
 
 cmd_uninstall() {
@@ -367,6 +468,7 @@ usage() {
   update              升级到最新官方 Xray
   info                查看安装信息 (无需 root)
   uninstall           卸载 Xray (配置自动备份到 /root/xray-config-backup/)
+  bbr [on|off]        查看 BBR 状态; on/off 启用或关闭 (安装时默认自动启用)
   help                显示帮助
 
 环境变量(可选): PORT SNI DEST UUID NAME IP XRAY_VERSION
@@ -392,6 +494,7 @@ main() {
     update)    cmd_update ;;
     info)      cmd_info ;;
     uninstall) cmd_uninstall ;;
+    bbr)      cmd_bbr "$arg" ;;
     help|-h|--help) usage ;;
     *) die "未知命令: $cmd (使用: bash install.sh help)" ;;
   esac
