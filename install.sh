@@ -246,7 +246,7 @@ print_link() {
   local ip
   ip=$(get_public_ip)
   if [ -z "$ip" ]; then
-    warn "未能自动获取公网 IP, 可手动指定: IP=你的公网IP bash $0 link"
+    warn "未能自动获取公网 IP, 可手动指定: IP=你的公网IP bash install.sh link"
     ip="<你的公网IP>"
   fi
   echo ""

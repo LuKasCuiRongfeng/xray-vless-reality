@@ -12,7 +12,7 @@
 
 或一行管道方式 (建议先下载查看内容再执行):
 
-    curl -fsSL https://raw.githubusercontent.com/LuKasCuiRongfeng/xray-vless-reality/master/install.sh | sudo bash install.sh install
+    curl -fsSL https://raw.githubusercontent.com/LuKasCuiRongfeng/xray-vless-reality/master/install.sh | sudo bash -s install
 
 安装完成后脚本会直接打印 vless:// 分享链接, 复制到 v2rayN / Shadowrocket / Clash Verge 等客户端导入即可。
 
