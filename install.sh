@@ -381,6 +381,10 @@ cmd_info() {
 
 open_firewall() {
   local fw=""
+  if [ -z "${PORT:-}" ]; then
+    [ -f "$META_FILE" ] || die "无法确定端口: PORT 未设置且未找到 $META_FILE"
+    . "$META_FILE"
+  fi
   if have ufw && ufw status 2>/dev/null | grep -qi "active"; then
     ufw allow "$PORT/tcp" >/dev/null 2>&1 || true
     fw="ufw"
