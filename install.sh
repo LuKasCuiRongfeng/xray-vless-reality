@@ -139,7 +139,7 @@ gen_config() {
   [ -n "$UUID" ] || UUID=$("$BIN_FILE" uuid)
   sid=$(openssl rand -hex 8 2>/dev/null || od -An -N8 -tx1 /dev/urandom | tr -d ' \n')
   [ -n "$sid" ] || sid="0000000000000000"
-  PORT=$(echo "$PORT" | tr -cd '[:digit:]')
+  PORT=$(echo "${PORT:-443}" | tr -cd '[:digit:]')
   if [ -z "$PORT" ] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
     die "端口无效: ${PORT:-未设置} (PORT 应为 1-65535)"
   fi
