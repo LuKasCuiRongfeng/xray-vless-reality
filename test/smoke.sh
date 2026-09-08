@@ -62,7 +62,7 @@ sed -e "s|/usr/local/etc/xray|$SIM/etc|g" \
 
 # ---------- 场景工具 ----------
 reset() {
-  rm -f "$SIM/etc/config.json" "$SIM/etc/meta.conf" "$SIM/etc/firewall.conf" "$SIM/bbr.conf"
+  rm -f "$SIM/etc/config.json" "$SIM/etc/meta.conf" "$SIM/etc/firewall.conf" "$SIM/bbr.conf" "$SIM/etc/config.json.bak"
   unset -f ufw firewall-cmd systemctl iptables sysctl userdel netfilter-persistent iptables-save openssl chown 2>/dev/null || true
   chown() { return 0; }
   XRAY_DIR="$SIM/etc"
@@ -129,6 +129,39 @@ sc_keyparse_v262() {
   gen_config >/dev/null 2>&1 || { echo "gen_config 不应失败" >&2; return 1; }
   assert_contains "$CONFIG_FILE" '"privateKey": "V26PRIVKEY01"' "v26.2.6格式私钥" || return 1
   assert_contains "$META_FILE" 'PUB=V26PUBKEY02' "v26.2.6格式公钥" || return 1
+  return 0
+}
+sc_install_default_regen() {
+  reset; stub_xray_new
+  gen_config >/dev/null 2>&1 || return 1
+  require_root() { return 0; }
+  fetch_xray() { :; }
+  create_user() { return 0; }
+  systemctl() { [ "$1" = "is-active" ] && { echo "active"; return 0; }; return 0; }
+  sysctl() { if [ "$1" = "-n" ]; then echo "bbr"; fi; return 0; }
+  stub_ip
+  cmd_install "" > "$SIM/log/inst2" 2>&1
+  [ -f "$CONFIG_FILE.bak" ] || { echo "默认重生成应有配置备份" >&2; return 1; }
+  grep -q '^UUID=' "$META_FILE" || { echo "meta 应有 UUID" >&2; return 1; }
+  grep -q '"port": 443' "$CONFIG_FILE" || { echo "config 应有效" >&2; return 1; }
+  return 0
+}
+sc_install_keep() {
+  reset; stub_xray_new
+  gen_config >/dev/null 2>&1 || return 1
+  local old_uuid
+  old_uuid=$(grep '^UUID=' "$META_FILE" | cut -d= -f2)
+  require_root() { return 0; }
+  fetch_xray() { :; }
+  create_user() { return 0; }
+  systemctl() { [ "$1" = "is-active" ] && { echo "active"; return 0; }; return 0; }
+  sysctl() { if [ "$1" = "-n" ]; then echo "bbr"; fi; return 0; }
+  stub_ip
+  cmd_install "--keep" > "$SIM/log/inst3" 2>&1
+  local new_uuid
+  new_uuid=$(grep '^UUID=' "$META_FILE" | cut -d= -f2)
+  [ "$old_uuid" = "$new_uuid" ] || { echo "--keep 应保留原 UUID" >&2; return 1; }
+  [ -f "$CONFIG_FILE.bak" ] && { echo "--keep 不应生成备份" >&2; return 1; }
   return 0
 }
 sc_keyparse_old() {
@@ -289,6 +322,8 @@ run_sc "v26.2.6格式密钥解析(Password:无括号)" sc_keyparse_v262
 run_sc "旧格式密钥解析回归" sc_keyparse_old
 run_sc "异常密钥输出应报错并附原始输出" sc_keyparse_bad
 run_sc "非法端口应有明确报错" sc_port_invalid
+run_sc "install 默认重新生成配置(含备份)" sc_install_default_regen
+run_sc "install --keep 保留原配置" sc_install_keep
 run_sc "保留配置重装(端口从meta恢复)" sc_preserved_reinstall
 run_sc "ufw 放行+卸载回滚" sc_fw_ufw_rollback
 run_sc "firewalld 放行" sc_fw_firewalld

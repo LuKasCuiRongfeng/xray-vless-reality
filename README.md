@@ -10,7 +10,11 @@
     curl -fsSL https://raw.githubusercontent.com/LuKasCuiRongfeng/xray-vless-reality/master/install.sh -o install.sh
     sudo bash install.sh install
 
-或一行管道方式 (建议先下载查看内容再执行):
+一条命令 (推荐, 下载后执行, 脚本会留在服务器上便于后续管理):
+
+    curl -fsSL https://raw.githubusercontent.com/LuKasCuiRongfeng/xray-vless-reality/master/install.sh -o install.sh && sudo bash install.sh install
+
+管道方式 (不落盘, 仅供一次性安装; 执行完后服务器上没有 install.sh, 后续 link/restart 需重新下载):
 
     curl -fsSL https://raw.githubusercontent.com/LuKasCuiRongfeng/xray-vless-reality/master/install.sh | sudo bash -s install
 
@@ -21,8 +25,8 @@
 
 ## 常用命令
 
-    sudo bash install.sh install             安装或修复 (已安装时保留现有配置)
-    sudo bash install.sh install --force     强制重新生成配置 (新密钥 / 新UUID)
+    sudo bash install.sh install             安装 (默认重新生成配置/密钥, 旧配置自动备份)
+    sudo bash install.sh install --keep      保留现有配置, 仅修复 / 重装服务
     sudo bash install.sh link                重新打印分享链接 (无需 root)
     sudo bash install.sh restart             重启服务
     sudo bash install.sh status              查看服务状态 (无需 root)

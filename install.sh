@@ -320,19 +320,19 @@ show_summary() {
 }
 
 cmd_install() {
-  local force="${1:-}"
+  local mode="${1:-}"
   require_root
   check_deps
   mkdir -p "$XRAY_DIR"
   create_user
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   fetch_xray
-  if [ -f "$CONFIG_FILE" ] && [ -f "$META_FILE" ] && [ "$force" != "--force" ]; then
-    warn "检测到已有配置, 保留现有配置 (强制重新生成: sudo bash install.sh install --force)"
+  if [ "$mode" = "--keep" ] && [ -f "$CONFIG_FILE" ]; then
+    warn "已保留现有配置 (--keep)"
   else
     if [ -f "$CONFIG_FILE" ]; then
       cp -a "$CONFIG_FILE" "$CONFIG_FILE.bak"
-      warn "原配置已备份: $CONFIG_FILE.bak"
+      warn "原配置已备份: $CONFIG_FILE.bak (默认会重新生成配置; 保留旧配置用: install --keep)"
     fi
     gen_config
   fi
@@ -523,7 +523,8 @@ usage() {
 用法:  sudo bash install.sh [子命令]
 
 子命令:
-  install [--force]   安装或修复 (已安装时保留配置; --force 重新生成配置/密钥)
+  install              安装 (默认总是重新生成配置/密钥, 旧配置自动备份为 config.json.bak)
+  install --keep       保留现有配置, 仅修复 / 重装服务
   link                打印 VLESS + Reality 分享链接 (无需 root)
   start | stop | restart   服务管理
   status              查看服务状态 (无需 root)
