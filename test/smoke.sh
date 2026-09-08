@@ -81,6 +81,10 @@ stub_xray_old() {
   printf '#!/usr/bin/env bash\ncase "$1" in\n  x25519) printf "Private key: OLDPRIVKEY01\\nPublic key: OLDPUBKEY02\\n" ;;\n  uuid) echo "12345678-1234-1234-1234-123456789abc" ;;\n  *) echo "Xray vTEST (smoke)" ;;\nesac\n' > "$SIM/bin/xray"
   chmod +x "$SIM/bin/xray"
 }
+stub_xray_v262() {
+  printf '#!/usr/bin/env bash\ncase "$1" in\n  x25519) printf "PrivateKey: V26PRIVKEY01\\nPassword: V26PUBKEY02\\nHash32: BBBB\\n" ;;\n  uuid) echo "12345678-1234-1234-1234-123456789abc" ;;\n  *) echo "Xray v26.2.6 (smoke)" ;;\nesac\n\' > "$SIM/bin/xray"
+  chmod +x "$SIM/bin/xray"
+}
 stub_xray_bad() {
   printf '#!/usr/bin/env bash\ncase "$1" in\n  x25519) printf "Something unexpected: XYZ\\n" ;;\n  *) echo "Xray vTEST (smoke)" ;;\nesac\n' > "$SIM/bin/xray"
   chmod +x "$SIM/bin/xray"
@@ -101,7 +105,7 @@ sc_fresh_defaults() {
   assert_contains "$CONFIG_FILE" '"id": "12345678-1234-1234-1234-123456789abc"' "UUID" || return 1
   assert_contains "$META_FILE" 'PUB=NEWPUBKEY02' "新格式公钥" || return 1
   assert_contains "$META_FILE" 'NAME=xray-vless' "默认NAME" || return 1
-  assert_contains "$META_FILE" 'SNI=www.microsoft.com' "默认SNI" || return 1
+  assert_contains "$META_FILE" 'SNI=www.cloudflare.com' "默认SNI(cloudflare)" || return 1
   assert_contains "$META_FILE" 'SID=' "shortId 存在" || return 1
   return 0
 }
@@ -118,6 +122,13 @@ sc_env_overrides() {
   assert_contains_str "$link" "@1.2.3.4:8443" "链接端口" || return 1
   assert_contains_str "$link" "pbk=NEWPUBKEY02" "链接公钥" || return 1
   assert_contains_str "$link" "flow=xtls-rprx-vision" "Vision流控" || return 1
+  return 0
+}
+sc_keyparse_v262() {
+  reset; stub_xray_v262
+  gen_config >/dev/null 2>&1 || { echo "gen_config 不应失败" >&2; return 1; }
+  assert_contains "$CONFIG_FILE" '"privateKey": "V26PRIVKEY01"' "v26.2.6格式私钥" || return 1
+  assert_contains "$META_FILE" 'PUB=V26PUBKEY02' "v26.2.6格式公钥" || return 1
   return 0
 }
 sc_keyparse_old() {
@@ -274,6 +285,7 @@ run_sc() { # name fn
 echo "== xray-vless-reality 回归测试 =="
 run_sc "全新安装默认值(新格式密钥)" sc_fresh_defaults
 run_sc "环境变量覆盖(PORT/SNI/NAME/链接)" sc_env_overrides
+run_sc "v26.2.6格式密钥解析(Password:无括号)" sc_keyparse_v262
 run_sc "旧格式密钥解析回归" sc_keyparse_old
 run_sc "异常密钥输出应报错并附原始输出" sc_keyparse_bad
 run_sc "非法端口应有明确报错" sc_port_invalid

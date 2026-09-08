@@ -36,8 +36,8 @@
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | PORT | 443 | 监听端口 (1-65535) |
-| SNI | www.microsoft.com | 伪装域名 (证书 SNI) |
-| DEST | www.microsoft.com:443 | Reality 目标地址 |
+| SNI | www.cloudflare.com | 伪装域名 (证书 SNI, Reality 标准目标, 默认不用 microsoft——实测握手会被拒) |
+| DEST | www.cloudflare.com:443 | Reality 目标地址 |
 | UUID | 自动生成 | 用户 ID |
 | NAME | xray-vless | 分享链接备注 |
 | IP | 自动探测 | 手动指定公网 IP |

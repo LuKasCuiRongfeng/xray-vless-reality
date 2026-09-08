@@ -9,8 +9,8 @@
 #
 #  环境变量(可选):
 #    PORT          监听端口, 默认 443
-#    SNI           伪装域名, 默认 www.microsoft.com
-#    DEST          Reality 目标, 默认 www.microsoft.com:443
+#    SNI           伪装域名, 默认 www.cloudflare.com (Reality 标准伪装目标)
+#    DEST          Reality 目标, 默认 www.cloudflare.com:443
 #    UUID          自定义用户 ID, 默认自动生成
 #    NAME          链接备注, 默认 xray-vless
 #    IP            手动指定公网 IP, 默认自动探测
@@ -132,7 +132,7 @@ gen_config() {
   keys=$("$BIN_FILE" x25519)
   # 兼容旧版 (Private key:/Public key:) 与新 (PrivateKey:/Password (PublicKey):) 两种输出
   priv=$(printf '%s\n' "$keys" | sed -n 's/^Private *[Kk]ey: *//p')
-  pub=$(printf '%s\n' "$keys" | sed -n 's/^Password *(PublicKey): *//p; s/^Public *[Kk]ey: *//p')
+  pub=$(printf '%s\n' "$keys" | sed -n 's/^Password *\([^:]*\): *//p; s/^Public *[Kk]ey: *//p')
   if [ -z "$priv" ] || [ -z "$pub" ]; then
     die "生成 Reality 密钥失败, xray x25519 原始输出: ${keys}"
   fi
@@ -144,10 +144,10 @@ gen_config() {
   if [ -z "$PORT" ] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
     die "端口无效: ${PORT:-未设置} (PORT 应为 1-65535)"
   fi
-  SNI=$(sanitize "${SNI:-www.microsoft.com}")
-  [ -n "$SNI" ] || SNI="www.microsoft.com"
-  DEST=$(echo "${DEST:-www.microsoft.com:443}" | tr -cd '[:alnum:]_.:-')
-  [ -n "$DEST" ] || DEST="www.microsoft.com:443"
+  SNI=$(sanitize "${SNI:-www.cloudflare.com}")
+  [ -n "$SNI" ] || SNI="www.cloudflare.com"
+  DEST=$(echo "${DEST:-www.cloudflare.com:443}" | tr -cd '[:alnum:]_.:-')
+  [ -n "$DEST" ] || DEST="www.cloudflare.com:443"
   NAME=$(sanitize "${NAME:-xray-vless}")
   [ -n "$NAME" ] || NAME="xray-vless"
   if (exec 3<>/dev/tcp/127.0.0.1/"$PORT") 2>/dev/null; then
