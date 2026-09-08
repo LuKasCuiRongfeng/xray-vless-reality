@@ -41,6 +41,7 @@
 | NAME | xray-vless | 分享链接备注 |
 | IP | 自动探测 | 手动指定公网 IP |
 | XRAY_VERSION | 自动最新 | 固定 Xray 版本, 如 v2.26.0 |
+| GEO_DATA | 0 | 是否安装 geoip/geosite 路由数据 (1 为安装, 约 29MB, 本脚本默认不需要) |
 
 示例: 换端口 + 换伪装域名
 
@@ -54,6 +55,7 @@
 | /usr/local/etc/xray/config.json | 服务配置 (含私钥, 仅本机可读) |
 | /usr/local/etc/xray/meta.conf | UUID/公钥/SNI 等元数据, 用于打印链接 |
 | /etc/systemd/system/xray.service | systemd 单元 (专用用户运行, 已加固) |
+| geoip.dat / geosite.dat | 仅 GEO_DATA=1 时安装 (约 29MB, 默认不装) |
 | 系统用户 xray | 无登录 shell 的专用用户 |
 
 ## 设计说明
@@ -62,6 +64,8 @@
 - x25519 密钥对由 Xray 自带命令 xray x25519 生成, 私钥只保存在服务器本地。
 - 脚本幂等: 重复执行 install 不会覆盖现有配置; 需要更换时用 --force。
 - 分享链接只包含公钥 / UUID / SNI / shortId, 不包含私钥。
+- 默认最小安装: 只装官方 xray 二进制 (~35MB), 不装 geoip/geosite 路由数据 (本配置用不到)。
+- 脚本不安装任何系统软件包 (curl / unzip 仅检查是否存在), 不动内核 / BBR / 防火墙配置, 不开面板端口。
 
 ## 安全提示
 

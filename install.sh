@@ -15,6 +15,7 @@
 #    NAME          链接备注, 默认 xray-vless
 #    IP            手动指定公网 IP, 默认自动探测
 #    XRAY_VERSION  指定 Xray 版本, 默认自动获取最新
+#    GEO_DATA      是否安装 geoip/geosite 路由数据(需路由规则时), 默认 0(不装)
 # ============================================================
 set -euo pipefail
 
@@ -95,11 +96,16 @@ fetch_xray() {
     die "压缩包中未找到 xray 二进制文件, 请检查 $url"
   fi
   install -m 0755 "$tmp/x/xray" "$BIN_FILE"
-  if [ -f "$tmp/x/geoip.dat" ]; then
-    install -m 0644 "$tmp/x/geoip.dat" "$XRAY_DIR/geoip.dat"
-  fi
-  if [ -f "$tmp/x/geosite.dat" ]; then
-    install -m 0644 "$tmp/x/geosite.dat" "$XRAY_DIR/geosite.dat"
+  if [ "${GEO_DATA:-0}" = "1" ]; then
+    if [ -f "$tmp/x/geoip.dat" ]; then
+      install -m 0644 "$tmp/x/geoip.dat" "$XRAY_DIR/geoip.dat"
+    fi
+    if [ -f "$tmp/x/geosite.dat" ]; then
+      install -m 0644 "$tmp/x/geosite.dat" "$XRAY_DIR/geosite.dat"
+    fi
+    ok "已安装 geoip/geosite 路由数据 (~29MB)"
+  else
+    log "跳过 geoip/geosite 数据文件 (~29MB), 如需路由规则: sudo GEO_DATA=1 bash install.sh install --force"
   fi
   rm -rf "$tmp"
   trap - EXIT
