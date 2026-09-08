@@ -57,6 +57,7 @@
 | /usr/local/etc/xray/config.json | 服务配置 (含私钥, 仅本机可读) |
 | /usr/local/etc/xray/meta.conf | UUID/公钥/SNI 等元数据, 用于打印链接 |
 | /etc/systemd/system/xray.service | systemd 单元 (专用用户运行, 已加固) |
+| /usr/local/etc/xray/firewall.conf | 记录脚本自动放行的防火墙规则 (用于卸载时精确回滚) |
 | geoip.dat / geosite.dat | 仅 GEO_DATA=1 时安装 (约 29MB, 默认不装) |
 | 系统用户 xray | 无登录 shell 的专用用户 |
 
@@ -69,6 +70,7 @@
 - 默认最小安装: 只装官方 xray 二进制 (~35MB), 不装 geoip/geosite 路由数据 (本配置用不到)。
 - 脚本不安装任何系统软件包 (curl / unzip 仅检查是否存在), 不换内核、不改防火墙、不开面板端口。
 - BBR: 内核支持时自动启用 2 个 sysctl 参数 (使用系统自带模块, 零软件/零磁盘, 即时生效无需重启); 内核低于 4.9 时自动跳过, 绝不自动升级内核。
+- 系统防火墙: 自动检测 ufw / firewalld / iptables, 只**精准放行**自己的 TCP 端口 (不清空用户已有规则), 卸载时仅回滚自己添加的规则。云厂商安全组 (如 Vultr Firewall) 在 VPS 之外, 脚本无法操作, 需在云控制台手动放行。
 
 ## 安全提示
 
@@ -82,3 +84,4 @@
 
 会停止并禁用服务, 删除二进制 / 配置 / systemd 单元 / 系统用户, 配置自动备份到 /root/xray-config-backup/。
 BBR 为系统级优化, 卸载时保留; 如需移除请执行 sudo bash install.sh bbr off。
+脚本自动添加的防火墙规则会随卸载精确回滚 (只删除自己加的, 不动其他规则); 云厂商安全组放行需在云控制台手动移除。

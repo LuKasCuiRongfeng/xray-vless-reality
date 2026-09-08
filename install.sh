@@ -25,6 +25,7 @@ CONFIG_FILE="$XRAY_DIR/config.json"
 META_FILE="$XRAY_DIR/meta.conf"
 BIN_FILE="/usr/local/bin/xray"
 SERVICE_FILE="/etc/systemd/system/xray.service"
+FW_FILE="$XRAY_DIR/firewall.conf"
 SERVICE_NAME="xray"
 SERVICE_USER="xray"
 
@@ -302,6 +303,12 @@ show_summary() {
   echo "  配置文件:   $CONFIG_FILE"
   echo "  服务单元:   $SERVICE_FILE"
   echo "  系统用户:   $SERVICE_USER"
+  if [ -f "$FW_FILE" ]; then
+    . "$FW_FILE"
+    echo "  防火墙放行: 已自动放行 TCP $PORT ($FIREWALL)"
+  else
+    echo "  防火墙放行: 系统防火墙无限制 (公网不通需检查云安全组)"
+  fi
   echo "======================================================"
   echo ""
   echo "  分享链接 (复制到 v2rayN / Shadowrocket 等客户端):"
@@ -340,6 +347,7 @@ cmd_install() {
     die "服务启动失败, 请检查: journalctl -u xray -n 50"
   fi
   enable_bbr
+  open_firewall
   show_summary
 }
 
@@ -369,6 +377,54 @@ cmd_status() {
 
 cmd_info() {
   show_summary
+}
+
+open_firewall() {
+  local fw=""
+  if have ufw && ufw status 2>/dev/null | grep -qi "active"; then
+    ufw allow "$PORT/tcp" >/dev/null 2>&1 || true
+    fw="ufw"
+  elif have firewall-cmd && systemctl is-active --quiet firewalld 2>/dev/null; then
+    firewall-cmd --permanent --add-port="$PORT/tcp" >/dev/null 2>&1 || true
+    firewall-cmd --reload >/dev/null 2>&1 || true
+    fw="firewalld"
+  elif have iptables; then
+    if iptables -S INPUT 2>/dev/null | grep -qE "(^-P INPUT (DROP|REJECT))"; then
+      if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
+        iptables -I INPUT -p tcp --dport "$PORT" -j ACCEPT >/dev/null 2>&1 || true
+      fi
+      fw="iptables"
+    fi
+  fi
+  if [ -n "$fw" ]; then
+    printf 'FIREWALL=%s\nPORT=%s\n' "$fw" "$PORT" > "$FW_FILE"
+    if [ "$fw" = "iptables" ]; then
+      have netfilter-persistent && netfilter-persistent save >/dev/null 2>&1 || true
+      mkdir -p /etc/iptables 2>/dev/null || true
+      { iptables-save > /etc/iptables/rules.v4; } 2>/dev/null || true
+    fi
+    ok "已自动放行 TCP $PORT (防火墙: $fw)"
+  else
+    rm -f "$FW_FILE"
+    warn "未检测到需要放行的系统防火墙 (ufw/firewalld/iptables 均未启用限制)"
+    warn "若公网仍无法连接: 多为云厂商安全组拦截, 请到云控制台放行 TCP $PORT (脚本无法操作云平台)"
+  fi
+}
+
+close_firewall() {
+  if [ ! -f "$FW_FILE" ]; then
+    return
+  fi
+  . "$FW_FILE"
+  case "$FIREWALL" in
+    ufw)        ufw delete allow "$PORT/tcp" >/dev/null 2>&1 || true ;;
+    firewalld)  firewall-cmd --permanent --remove-port="$PORT/tcp" >/dev/null 2>&1 || true
+                firewall-cmd --reload >/dev/null 2>&1 || true ;;
+    iptables)   iptables -D INPUT -p tcp --dport "$PORT" -j ACCEPT >/dev/null 2>&1 || true
+                have netfilter-persistent && netfilter-persistent save >/dev/null 2>&1 || true ;;
+  esac
+  warn "已回滚本脚本添加的防火墙规则 ($FIREWALL, TCP $PORT)"
+  rm -f "$FW_FILE"
 }
 
 enable_bbr() {
@@ -451,6 +507,7 @@ cmd_uninstall() {
     cp -a "$CONFIG_FILE" "$backup_dir/config.json.$(date +%Y%m%d%H%M%S)"
     warn "配置已备份到: $backup_dir"
   fi
+  close_firewall
   rm -f "$BIN_FILE"
   rm -rf "$XRAY_DIR"
   userdel "$SERVICE_USER" 2>/dev/null || true
