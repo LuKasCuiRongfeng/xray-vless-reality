@@ -95,7 +95,7 @@ resolve_version() {
     return
   fi
   local ver
-  ver=$(curl -fsSL --retry 3 -m 30 "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | grep -m1 '"tag_name"' | cut -d'"' -f4) || true
+  ver=$(curl -fsSL --retry 3 -m 30 "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' | head -n 1 | cut -d'"' -f4) || true
   if [ -z "$ver" ]; then
     die "自动获取最新版本失败, 请设置 XRAY_VERSION=v2.x.x 后重试"
   fi
@@ -528,7 +528,7 @@ resolve_hy2_version() {
     return
   fi
   local ver
-  ver=$(curl -fsSL --retry 3 -m 30 "https://api.github.com/repos/apernet/hysteria/releases/latest" | grep -m1 '"tag_name"' | cut -d'"' -f4) || true
+  ver=$(curl -fsSL --retry 3 -m 30 "https://api.github.com/repos/apernet/hysteria/releases/latest" | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' | head -n 1 | cut -d'"' -f4) || true
   if [ -z "$ver" ]; then
     die "自动获取 Hysteria2 最新版本失败, 请设置 HY2_VERSION=app/v2.x.x 重试"
   fi
